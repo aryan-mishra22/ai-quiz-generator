@@ -29,7 +29,7 @@ Built with **Django** and **Django REST Framework (DRF)** on the backend, with a
 
 ## How the frontend talks to the backend
 
-The page (`quiz/templates/quiz/index.html`) is a single form with no server-rendered quiz logic. On submit, JavaScript:
+The page (`frontend/templates/index.html`) is a single form with no server-rendered quiz logic. On submit, JavaScript:
 
 1. Reads the pasted text from the textarea
 2. Sends a `POST` request to `/api/generate-quiz/` (a DRF endpoint) with the text as JSON, including Django's CSRF token as a header
@@ -47,16 +47,16 @@ User pastes text (browser)
 JavaScript (fetch) → POST /api/generate-quiz/
         │
         ▼
-Django URL routing (quizproject/urls.py → quiz/urls.py)
+Django URL routing (backend/quizproject/urls.py → backend/quiz/urls.py)
         │
         ▼
-DRF API view (quiz/views.py → generate_quiz_api)
+DRF API view (backend/quiz/views.py → generate_quiz_api)
         │
         ▼
 Text preprocessing & sentence segmentation (spaCy)
         │
         ▼
-Answer candidate extraction (quiz/full_pipeline.py)
+Answer candidate extraction (backend/quiz/full_pipeline.py)
    ├── Named entities (PERSON, DATE, GPE, ORG, NORP)   → used when present
    └── Noun phrases (fallback)                          → used when no entities found
         │
@@ -81,7 +81,7 @@ JSON response → JavaScript renders quiz in the page
 
 ## Database Schema
 
-Schema is defined via Django models (`quiz/models.py`) and created through migrations — no manual SQL required.
+Schema is defined via Django models (`backend/quiz/models.py`) and created through migrations — no manual SQL required.
 
 ```python
 class Document(models.Model):
@@ -119,7 +119,7 @@ source venv/Scripts/activate   # Windows (Git Bash)
 
 ### 2. Install dependencies
 ```bash
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 python -m spacy download en_core_web_sm
 ```
 
@@ -128,19 +128,15 @@ python -m spacy download en_core_web_sm
 CREATE DATABASE quiz_generator;
 ```
 
-### 4. Configure the database in Django settings
-In `quizproject/settings.py`:
-```python
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'quiz_generator',
-        'USER': 'root',
-        'PASSWORD': 'YOUR_PASSWORD',
-        'HOST': '127.0.0.1',
-        'PORT': '3306',
-    }
-}
+### 4. Configure environment variables
+Set a Django secret key and your MySQL connection details in the environment. For Git Bash:
+```bash
+export DJANGO_SECRET_KEY="$(python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())')"
+export DB_NAME=quiz_generator
+export DB_USER=root
+export DB_PASSWORD=YOUR_PASSWORD
+export DB_HOST=127.0.0.1
+export DB_PORT=3306
 ```
 
 > **Note (Windows + MySQL 8):** if you hit `Access denied for user 'root'@'localhost'` even with the correct password, it's usually a `mysqlclient` / `caching_sha2_password` authentication mismatch, not a wrong credential. Fix by switching the auth plugin:
@@ -151,13 +147,13 @@ DATABASES = {
 
 ### 5. Run migrations
 ```bash
-python manage.py makemigrations quiz
-python manage.py migrate
+python backend/manage.py makemigrations quiz
+python backend/manage.py migrate
 ```
 
 ### 6. Run the server
 ```bash
-python manage.py runserver
+python backend/manage.py runserver
 ```
 Visit `http://127.0.0.1:8000` — paste a paragraph and click **Generate Quiz**.
 
@@ -203,22 +199,25 @@ These are real, current limitations of the pipeline — not bugs, but honest con
 
 ```
 ai-quiz-generator/
-├── manage.py                    # Django entry point
-├── quizproject/
-│   ├── settings.py              # Project settings, incl. DATABASES
-│   ├── urls.py                  # Root URL routing
-│   ├── asgi.py
-│   └── wsgi.py
-├── quiz/
-│   ├── models.py                # Document, Question, Option models
-│   ├── serializers.py           # DRF serializers
-│   ├── views.py                 # HTML view + DRF API views
-│   ├── urls.py                  # App-level URL routing
-│   ├── admin.py
-│   ├── full_pipeline.py         # Core NLP + AI pipeline (extraction, QG, distractors)
-│   ├── migrations/              # Auto-generated schema migrations
-│   └── templates/quiz/
-│       └── index.html           # Frontend: HTML/CSS/JS, calls the DRF API via fetch()
-├── requirements.txt             # Python dependencies
+├── backend/
+│   ├── manage.py                # Django entry point
+│   ├── requirements.txt         # Python dependencies
+│   ├── full_pipeline.py         # Standalone pipeline copy
+│   ├── quizproject/
+│   │   ├── settings.py          # Project settings, incl. DATABASES
+│   │   ├── urls.py              # Root URL routing
+│   │   ├── asgi.py
+│   │   └── wsgi.py
+│   └── quiz/
+│       ├── models.py            # Document, Question, Option models
+│       ├── serializers.py       # DRF serializers
+│       ├── views.py             # HTML view + DRF API views
+│       ├── urls.py              # App-level URL routing
+│       ├── admin.py
+│       ├── full_pipeline.py     # Core NLP + AI pipeline
+│       └── migrations/          # Auto-generated schema migrations
+├── frontend/
+│   └── templates/
+│       └── index.html           # HTML/CSS/JS, calls the DRF API via fetch()
 └── README.md
 ```

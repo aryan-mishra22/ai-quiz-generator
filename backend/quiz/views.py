@@ -37,7 +37,7 @@ def index(request):
                         )
                 quiz = quiz_data
 
-    return render(request, "quiz/index.html", {"quiz": quiz, "error": error})
+    return render(request, "index.html", {"quiz": quiz, "error": error})
 
 
 @api_view(['POST'])

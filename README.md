@@ -1,50 +1,42 @@
-# AI Quiz Generator
+# QuizAI
 
-An AI-powered platform that automatically generates multiple-choice quiz questions from any text input, using NLP entity extraction, transformer-based question generation, and semantic similarity for distractor generation.
+QuizAI is a responsive learning dashboard for turning study materials into interactive quizzes. The current frontend is a **React + Vite** application with local mock data; it demonstrates the complete user experience without connecting to backend services.
 
-Built with **Django** and **Django REST Framework (DRF)** on the backend, with a lightweight **vanilla JavaScript** frontend that talks to the API via `fetch()` — no page reloads, no frontend framework required.
+The Django and Django REST Framework application remains in `backend/`. The React frontend does not call it yet. PDF handling, quiz generation, scoring history, and preferences are simulated in the browser and persisted locally for the demo.
 
-## Features
+## Frontend features
 
-- Paste a paragraph (or a few sentences on a topic) and get back a full multiple-choice quiz
-- Fully asynchronous UI — the page never reloads; JavaScript calls the API and renders results in place
-- Works on both **named-entity-rich text** (biographies, history, current events) and **conceptual/technical text** (via noun-phrase fallback extraction)
-- Wrong answer choices ("distractors") are chosen using semantic similarity, not random selection — so they're plausible rather than obviously wrong
-- All generated quizzes are persisted to a relational database via Django's ORM
-- Loading spinner while the quiz is generating
-- "Download as PDF" button (browser print-to-PDF, styled to hide everything but the quiz)
+- Dashboard with learning statistics, recent quizzes, and activity
+- Quiz creation from a selected PDF file or a topic
+- Configurable question count, difficulty, question types, answer count, and explanations
+- Interactive quiz practice, navigation, scoring, answer review, and retry
+- Quiz search, difficulty/date filters, grid/list views, and delete confirmation
+- PDF library with simulated file metadata and delete confirmation
+- Activity history and profile, appearance, and notification settings
+- Responsive sidebar with collapse and mobile navigation
 
-## Tech Stack
+## Technology
 
 | Layer | Technology |
 |---|---|
-| Language | Python 3.11 |
-| Web framework | Django |
-| API layer | Django REST Framework (DRF) |
-| Frontend | HTML, CSS, vanilla JavaScript (`fetch` API) |
-| NLP / entity extraction | spaCy (`en_core_web_sm`) |
-| Question generation | Hugging Face Transformers — `valhalla/t5-base-qg-hl` (T5) |
-| Distractor generation | Sentence-Transformers — `all-MiniLM-L6-v2` |
-| Database | MySQL (via Django ORM) |
+| Frontend | React, JavaScript, Vite |
+| Styling | Tailwind CSS v4 with responsive application styles |
+| Routing | React Router DOM |
+| Icons | Lucide React |
+| Demo persistence | Browser localStorage |
+| Existing backend | Django, Django REST Framework, MySQL |
+| Existing NLP pipeline | spaCy, Transformers, Sentence-Transformers |
 
-## How the frontend talks to the backend
+## Frontend demo behavior
 
-The page (`frontend/templates/index.html`) is a single form with no server-rendered quiz logic. On submit, JavaScript:
+Run the frontend independently at `http://localhost:5173`. Its mock service boundary is in `frontend/src/services/demoService.js`; demo quizzes, questions, and documents are in `frontend/src/data/mockData.js`. This keeps mock behavior separate from the UI so it can later be replaced with API calls.
 
-1. Reads the pasted text from the textarea
-2. Sends a `POST` request to `/api/generate-quiz/` (a DRF endpoint) with the text as JSON, including Django's CSRF token as a header
-3. Receives a JSON response containing the generated questions, options, and correct answers
-4. Renders the quiz directly into the page via DOM manipulation — no reload, no server-rendered HTML for the results
+PDF selection currently checks the filename/type and size, then creates sample file metadata. It does **not** upload or read PDF contents. Quiz generation uses bundled mock questions, not AI or RAG. Demo quizzes, documents, and activity are saved in browser localStorage.
 
-This means the same `/api/generate-quiz/` endpoint could equally be consumed by a React app, a mobile app, or any other client — the JavaScript in this project is just one example consumer of the API.
-
-## Architecture
+## Existing backend quiz-generation flow
 
 ```
-User pastes text (browser)
-        │
-        ▼
-JavaScript (fetch) → POST /api/generate-quiz/
+Text input from an external client
         │
         ▼
 Django URL routing (backend/quizproject/urls.py → backend/quiz/urls.py)
@@ -76,7 +68,7 @@ Saved to MySQL via Django ORM
    Option.objects.create(...)
         │
         ▼
-JSON response → JavaScript renders quiz in the page
+JSON response → API client (React integration is future work)
 ```
 
 ## Database Schema
@@ -107,7 +99,19 @@ class Option(models.Model):
 
 Resulting tables: `quiz_document`, `quiz_question`, `quiz_option`.
 
-## Setup
+## Run the React frontend
+
+Requirements: Node.js 20.19+ or 22.12+.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Create a production build with `npm run build`; preview it locally with `npm run preview`.
+
+## Run the existing Django backend
 
 ### 1. Clone and create a virtual environment
 ```bash
@@ -155,14 +159,14 @@ python backend/manage.py migrate
 ```bash
 python backend/manage.py runserver
 ```
-Visit `http://127.0.0.1:8000` — paste a paragraph and click **Generate Quiz**.
+The Django backend and its existing API endpoints are not currently connected to the React app.
 
 ## API Endpoints (DRF)
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/` | The quiz generator page (HTML + JS frontend) |
-| POST | `/api/generate-quiz/` | Accepts `{"text": "..."}`, returns generated quiz as JSON, saves to DB. This is what the frontend JavaScript calls. |
+| GET | `/` | Existing Django-rendered page (separate from the React app) |
+| POST | `/api/generate-quiz/` | Accepts `{"text": "..."}`, returns generated quiz as JSON, saves to DB |
 | GET | `/api/documents/` | Returns all previously generated documents + their questions/options as JSON |
 
 Example request (independent of the frontend):
@@ -172,7 +176,7 @@ curl -X POST http://127.0.0.1:8000/api/generate-quiz/ \
   -d "{\"text\": \"Albert Einstein developed the theory of relativity in 1905.\"}"
 ```
 
-## Known Limitations
+## Existing backend pipeline limitations
 
 These are real, current limitations of the pipeline — not bugs, but honest constraints worth being aware of:
 
@@ -193,7 +197,7 @@ These are real, current limitations of the pipeline — not bugs, but honest con
 - "Take the quiz" interactive mode with scoring, graded server-side
 - Live deployment (Render/Railway) with a cloud-hosted database
 - DRF authentication (token/session) for the API endpoints
-- Swap the vanilla JS frontend for a React app consuming the same `/api/generate-quiz/` endpoint, with no backend changes required
+- Connect the React frontend to the Django API and add document Q&A and RAG-based quiz generation
 
 ## Project Structure
 
@@ -217,7 +221,15 @@ ai-quiz-generator/
 │       ├── full_pipeline.py     # Core NLP + AI pipeline
 │       └── migrations/          # Auto-generated schema migrations
 ├── frontend/
-│   └── templates/
-│       └── index.html           # HTML/CSS/JS, calls the DRF API via fetch()
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.js
+│   └── src/
+│       ├── App.jsx
+│       ├── components/          # Layout, upload, and shared UI
+│       ├── data/                # Demo quizzes, questions, and documents
+│       ├── pages/               # Dashboard, quiz, library, history, settings
+│       ├── services/            # Local demo data and scoring helpers
+│       └── styles.css
 └── README.md
 ```

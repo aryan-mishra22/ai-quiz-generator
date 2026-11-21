@@ -8,7 +8,8 @@ function ActivityIcon({ type }) {
   return <span className={`activity-icon ${type}`}><Icon size={16} /></span>;
 }
 
-export default function Dashboard({ quizzes, documents, activities, onStartQuiz }) {
+export default function Dashboard({ userName, quizzes, documents, activities, onStartQuiz }) {
+  const firstName = userName?.trim().split(/\s+/)[0] || 'Jamie';
   const completed = quizzes.filter((quiz) => quiz.score !== null && quiz.score !== undefined);
   const average = completed.length
     ? Math.round(completed.reduce((total, quiz) => total + quiz.score, 0) / completed.length)
@@ -19,7 +20,7 @@ export default function Dashboard({ quizzes, documents, activities, onStartQuiz 
     <>
       <PageHeading
         eyebrow="YOUR LEARNING SPACE"
-        title={<>Welcome back, Jamie <span className="wave">✦</span></>}
+        title={<>Welcome back, {firstName} <span className="wave">✦</span></>}
         description="Turn your learning materials into interactive quizzes."
         action={<Link className="button primary" to="/create-quiz"><Plus size={17} /> Create new quiz</Link>}
       />

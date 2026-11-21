@@ -86,6 +86,7 @@ function RoutedApp({ state, setState, theme, setTheme, onCreateQuiz, onUploadFil
           index
           element={
             <Dashboard
+              userName={user?.name}
               quizzes={state.quizzes}
               documents={state.documents}
               activities={state.activities}

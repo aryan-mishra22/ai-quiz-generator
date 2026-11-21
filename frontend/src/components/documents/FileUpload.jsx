@@ -26,7 +26,9 @@ export default function FileUpload({ onFileSelected, compact = false }) {
     setUploading(true);
     uploadTimerRef.current = window.setTimeout(() => {
       setUploading(false);
-      onFileSelected(file);
+      Promise.resolve(onFileSelected(file)).catch((uploadError) => {
+        setError(uploadError.message || 'The PDF could not be uploaded.');
+      });
     }, 650);
   };
 

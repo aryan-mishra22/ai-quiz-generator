@@ -69,6 +69,7 @@ export default function CreateQuiz({ onCreateQuiz, onUploadFile }) {
         title,
         sourceTitle: sourceType === 'document' ? file.name : `Topic: ${topic.trim()}`,
         sourceType,
+        file,
         topic: topic.trim() || title,
         objectives: objectives.trim(),
         questionCount,
@@ -78,6 +79,8 @@ export default function CreateQuiz({ onCreateQuiz, onUploadFile }) {
         includeExplanations,
       });
       navigate(`/quiz/${quiz.id}`, { state: { startNew: true } });
+    } catch (generationError) {
+      setError(generationError.message || 'The quiz could not be generated. Check that the Django server is running.');
     } finally {
       setGenerating(false);
     }
@@ -130,7 +133,7 @@ export default function CreateQuiz({ onCreateQuiz, onUploadFile }) {
               {sourceType === 'document' ? (
                 <div className="source-content">
                   <label className="field-label">Your study material</label>
-                  <FileUpload onFileSelected={(nextFile) => { setFile(nextFile); if (nextFile) onUploadFile(nextFile); setError(''); }} />
+                  <FileUpload onFileSelected={(nextFile) => { setFile(nextFile); setError(''); }} />
                 </div>
               ) : (
                 <div className="source-content field-stack">

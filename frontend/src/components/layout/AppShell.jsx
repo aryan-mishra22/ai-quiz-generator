@@ -7,6 +7,7 @@ import {
   FileClock,
   FileText,
   LayoutDashboard,
+  LogOut,
   Menu,
   Settings,
   Sparkles,
@@ -31,13 +32,16 @@ const pageTitles = {
   '/settings': 'Settings',
 };
 
-export default function AppShell({ theme }) {
+export default function AppShell({ theme, onLogout, user }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const title = location.pathname.startsWith('/quiz/') ? 'Quiz practice' : (pageTitles[location.pathname] || 'QuizAI');
+  const displayName = user?.name || 'Jamie Davis';
+  const initials = displayName.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
 
   const closeMobile = () => setMobileOpen(false);
 
@@ -87,14 +91,18 @@ export default function AppShell({ theme }) {
 
         <div className="sidebar-bottom">
           <button className="profile-button" onClick={() => { navigate('/settings'); closeMobile(); }} title="Open settings">
-            <span className="avatar">JD</span>
+            <span className="avatar">{initials}</span>
             {!collapsed && (
               <span className="profile-copy">
-                <strong>Jamie Davis</strong>
+                <strong>{displayName}</strong>
                 <small>Free plan</small>
               </span>
             )}
             {!collapsed && <ChevronRight className="profile-chevron" size={16} />}
+          </button>
+          <button className="logout-button" onClick={onLogout} title="Sign out">
+            <LogOut size={17} />
+            {!collapsed && <span>Sign out</span>}
           </button>
         </div>
       </aside>
@@ -122,10 +130,32 @@ export default function AppShell({ theme }) {
               </div>
             )}
             <span className="topbar-divider" />
-            <button className="topbar-user" onClick={() => navigate('/settings')} aria-label="Open profile settings">
-              <span className="avatar small">JD</span>
-              <span className="topbar-user-name">Jamie Davis</span>
-            </button>
+            <div className="topbar-profile-wrap">
+              <button
+                className="topbar-user"
+                onClick={() => setProfileOpen(!profileOpen)}
+                aria-label="Open profile menu"
+                aria-expanded={profileOpen}
+              >
+                <span className="avatar small">{initials}</span>
+                <span className="topbar-user-name">{displayName}</span>
+                <ChevronRight className={`profile-menu-chevron ${profileOpen ? 'open' : ''}`} size={14} />
+              </button>
+              {profileOpen && (
+                <div className="profile-popover">
+                  <div className="profile-popover-user">
+                    <span className="avatar small">{initials}</span>
+                    <span><strong>{displayName}</strong><small>{user?.email || 'QuizAI member'}</small></span>
+                  </div>
+                  <button onClick={() => { setProfileOpen(false); navigate('/settings'); closeMobile(); }}>
+                    <Settings size={16} /> Account settings
+                  </button>
+                  <button className="profile-logout" onClick={() => { setProfileOpen(false); onLogout(); }}>
+                    <LogOut size={16} /> Log out
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
         <main className="content-area">

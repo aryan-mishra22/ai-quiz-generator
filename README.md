@@ -140,11 +140,13 @@ GRANT ALL PRIVILEGES ON quiz_generator.* TO 'quiz_app'@'127.0.0.1';
 ```
 
 ### 4. Configure environment variables
-Copy `.env.example` to `.env` at the repository root and replace the placeholders. Generate a Django secret key with:
+Copy `backend/.env.example` to `backend/.env` for non-password settings. Generate a Django secret key with:
 ```bash
 python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 ```
-Put the generated value in `DJANGO_SECRET_KEY`. Create a dedicated MySQL user for the app and use its credentials in `.env`; do not commit `.env`.
+Put the generated value in `DJANGO_SECRET_KEY`. Create a dedicated MySQL user for the app and set its password in your operating-system or deployment environment as `DB_PASSWORD`—not in `backend/.env`. For PowerShell, set it in the same terminal before starting Django with `$env:DB_PASSWORD = 'your-local-password'`. The README and example files contain no real database password.
+
+The frontend has its own optional `frontend/.env.example`. Copy it to `frontend/.env`; leave `VITE_API_BASE_URL` blank for local Vite proxying, or set it to the Django API origin for production. Never put secrets in frontend environment variables because Vite exposes `VITE_*` values to the browser.
 
 > **Note (Windows + MySQL 8):** if you hit an authentication error with the app database user, verify its host and password first. If your local `mysqlclient` setup requires the older authentication plugin, set it for the dedicated app user (not `root`):
 > ```sql

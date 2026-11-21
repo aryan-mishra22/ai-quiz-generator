@@ -12,12 +12,15 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import os
 from pathlib import Path
-from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import dotenv_values
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-load_dotenv(BASE_DIR.parent / '.env')
+for key, value in dotenv_values(BASE_DIR / '.env').items():
+    if key != 'DB_PASSWORD' and value is not None:
+        os.environ.setdefault(key, value)
 
 
 # Quick-start development settings - unsuitable for production
@@ -82,12 +85,19 @@ WSGI_APPLICATION = 'quizproject.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+DB_PASSWORD = os.environ.get('DB_PASSWORD')
+if not DB_PASSWORD:
+    raise ImproperlyConfigured(
+        'DB_PASSWORD is missing. Set it in your operating-system or deployment environment; '
+        'do not put it in backend/.env.'
+    )
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': os.environ.get('DB_NAME', 'quiz_generator'),
         'USER': os.environ.get('DB_USER', 'quiz_app'),
-        'PASSWORD': os.environ['DB_PASSWORD'],
+        'PASSWORD': DB_PASSWORD,
         'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
         'PORT': os.environ.get('DB_PORT', '3306'),
     }

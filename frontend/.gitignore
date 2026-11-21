@@ -2,3 +2,8 @@ node_modules/
 dist/
 .vite/
 .tsupgrader/
+
+# Local environment files (keep the template)
+.env
+.env.*
+!.env.example

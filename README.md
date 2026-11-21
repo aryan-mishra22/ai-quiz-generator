@@ -1,3 +1,7 @@
+<img width="940" height="437" alt="image" src="https://github.com/user-attachments/assets/d659b7a3-a0ce-4e8e-af45-35fb1c39a37c" />
+
+
+
 # QuizAI
 
 QuizAI is a study tool that turns learning materials into practice quizzes. Upload a PDF or enter text, generate multiple-choice questions, and use the quiz to check your understanding.

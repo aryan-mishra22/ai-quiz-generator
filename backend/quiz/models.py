@@ -2,6 +2,9 @@ from django.db import models
 
 class Document(models.Model):
     content = models.TextField()
+    name = models.CharField(max_length=255, blank=True, default='')
+    size = models.PositiveIntegerField(default=0)
+    page_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

@@ -20,4 +20,4 @@ class DocumentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Document
-        fields = ['id', 'content', 'created_at', 'questions']
+        fields = ['id', 'content', 'name', 'size', 'page_count', 'created_at', 'questions']

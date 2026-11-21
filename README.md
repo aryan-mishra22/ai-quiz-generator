@@ -1,11 +1,12 @@
 # QuizAI
 
-QuizAI is a responsive learning dashboard for turning study materials into interactive quizzes. The current frontend is a **React + Vite** application with local mock data; it demonstrates the complete user experience without connecting to backend services.
-
-The Django and Django REST Framework application remains in `backend/`. The React frontend does not call it yet. PDF handling, quiz generation, scoring history, and preferences are simulated in the browser and persisted locally for the demo.
+QuizAI is a responsive learning app for turning study materials into interactive quizzes. It has a **React + Vite** frontend and a **Django REST Framework** backend. Django handles accounts, PDF extraction, AI question generation, and persistent document/quiz data; the browser stores preferences and some demo state locally.
 
 ## Frontend features
 
+- Login and signup with Django session authentication
+- Browser-demo fallback authentication when the backend is unavailable
+- Sign-out action in the sidebar
 - Dashboard with learning statistics, recent quizzes, and activity
 - Quiz creation from a selected PDF file or a topic
 - Configurable question count, difficulty, question types, answer count, and explanations
@@ -27,11 +28,9 @@ The Django and Django REST Framework application remains in `backend/`. The Reac
 | Existing backend | Django, Django REST Framework, MySQL |
 | Existing NLP pipeline | spaCy, Transformers, Sentence-Transformers |
 
-## Frontend demo behavior
+## Frontend and API behavior
 
-Run the frontend independently at `http://localhost:5173`. Its mock service boundary is in `frontend/src/services/demoService.js`; demo quizzes, questions, and documents are in `frontend/src/data/mockData.js`. This keeps mock behavior separate from the UI so it can later be replaced with API calls.
-
-PDF selection currently checks the filename/type and size, then creates sample file metadata. It does **not** upload or read PDF contents. Quiz generation uses bundled mock questions, not AI or RAG. Demo quizzes, documents, and activity are saved in browser localStorage.
+Run the frontend at `http://localhost:5173`. Vite proxies `/api` requests to Django at `http://127.0.0.1:8000`. PDF uploads are size/type checked and extracted server-side with pypdf. Topic-based quiz generation sends text to Django. Sample quiz content is also bundled for a populated first-run dashboard.
 
 ## Existing backend quiz-generation flow
 
@@ -68,7 +67,7 @@ Saved to MySQL via Django ORM
    Option.objects.create(...)
         │
         ▼
-JSON response → API client (React integration is future work)
+JSON response → React API client
 ```
 
 ## Database Schema
@@ -78,6 +77,9 @@ Schema is defined via Django models (`backend/quiz/models.py`) and created throu
 ```python
 class Document(models.Model):
     content = models.TextField()
+    name = models.CharField(max_length=255, blank=True, default='')
+    size = models.PositiveIntegerField(default=0)
+    page_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
 class Question(models.Model):
@@ -131,21 +133,22 @@ python -m spacy download en_core_web_sm
 ```sql
 CREATE DATABASE quiz_generator;
 ```
-
-### 4. Configure environment variables
-Set a Django secret key and your MySQL connection details in the environment. For Git Bash:
-```bash
-export DJANGO_SECRET_KEY="$(python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())')"
-export DB_NAME=quiz_generator
-export DB_USER=root
-export DB_PASSWORD=YOUR_PASSWORD
-export DB_HOST=127.0.0.1
-export DB_PORT=3306
+Create a dedicated database user rather than using MySQL's `root` account:
+```sql
+CREATE USER 'quiz_app'@'127.0.0.1' IDENTIFIED BY 'REPLACE_WITH_A_NEW_UNIQUE_PASSWORD';
+GRANT ALL PRIVILEGES ON quiz_generator.* TO 'quiz_app'@'127.0.0.1';
 ```
 
-> **Note (Windows + MySQL 8):** if you hit `Access denied for user 'root'@'localhost'` even with the correct password, it's usually a `mysqlclient` / `caching_sha2_password` authentication mismatch, not a wrong credential. Fix by switching the auth plugin:
+### 4. Configure environment variables
+Copy `.env.example` to `.env` at the repository root and replace the placeholders. Generate a Django secret key with:
+```bash
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+```
+Put the generated value in `DJANGO_SECRET_KEY`. Create a dedicated MySQL user for the app and use its credentials in `.env`; do not commit `.env`.
+
+> **Note (Windows + MySQL 8):** if you hit an authentication error with the app database user, verify its host and password first. If your local `mysqlclient` setup requires the older authentication plugin, set it for the dedicated app user (not `root`):
 > ```sql
-> ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'YOUR_PASSWORD';
+> ALTER USER 'quiz_app'@'127.0.0.1' IDENTIFIED WITH mysql_native_password BY 'REPLACE_WITH_A_NEW_UNIQUE_PASSWORD';
 > FLUSH PRIVILEGES;
 > ```
 
@@ -159,13 +162,18 @@ python backend/manage.py migrate
 ```bash
 python backend/manage.py runserver
 ```
-The Django backend and its existing API endpoints are not currently connected to the React app.
+The React app connects to Django in development through the Vite `/api` proxy. Set `VITE_API_BASE_URL` to use a different backend URL in production.
 
 ## API Endpoints (DRF)
 
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/` | Existing Django-rendered page (separate from the React app) |
+| GET | `/api/auth/csrf/` | Sets the CSRF cookie for authenticated API requests |
+| POST | `/api/auth/signup/` | Creates a user and starts a Django session |
+| POST | `/api/auth/login/` | Signs in a user |
+| POST | `/api/auth/logout/` | Ends the current Django session |
+| GET | `/api/auth/me/` | Returns the current authenticated user |
 | POST | `/api/generate-quiz/` | Accepts `{"text": "..."}`, returns generated quiz as JSON, saves to DB |
 | GET | `/api/documents/` | Returns all previously generated documents + their questions/options as JSON |
 
@@ -191,13 +199,11 @@ These are real, current limitations of the pipeline — not bugs, but honest con
 
 - True/False and Short Answer question type generation (schema already supports this)
 - Pronoun/coreference resolution before question generation
-- PDF/DOCX upload support instead of paste-only input
+- DOCX upload support
 - Difficulty levels based on distractor similarity scores
-- User accounts and quiz history (Django auth already scaffolded in)
 - "Take the quiz" interactive mode with scoring, graded server-side
 - Live deployment (Render/Railway) with a cloud-hosted database
-- DRF authentication (token/session) for the API endpoints
-- Connect the React frontend to the Django API and add document Q&A and RAG-based quiz generation
+- Add document Q&A and RAG-based quiz generation
 
 ## Project Structure
 
@@ -206,7 +212,6 @@ ai-quiz-generator/
 ├── backend/
 │   ├── manage.py                # Django entry point
 │   ├── requirements.txt         # Python dependencies
-│   ├── full_pipeline.py         # Standalone pipeline copy
 │   ├── quizproject/
 │   │   ├── settings.py          # Project settings, incl. DATABASES
 │   │   ├── urls.py              # Root URL routing

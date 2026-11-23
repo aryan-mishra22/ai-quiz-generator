@@ -1,14 +1,60 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, FileText, Lightbulb, Sparkles } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
-import { LoadingState, PageHeading } from '../components/common.jsx';
+import { Link } from 'react-router-dom';
+import { PageHeading } from '../components/common.jsx';
 import FileUpload from '../components/documents/FileUpload.jsx';
 
 const questionTypeOptions = ['Multiple Choice', 'Multiple Select', 'True / False'];
 const steps = ['Choose source', 'Configure quiz', 'Ready to generate'];
+const generationMessages = [
+  'Gathering the key ideas from your material…',
+  'Turning those ideas into practice questions…',
+  'Adding the finishing touches to your quiz…',
+];
 
-export default function CreateQuiz({ onCreateQuiz, onUploadFile }) {
-  const navigate = useNavigate();
+function QuizGenerationLoader() {
+  const [messageIndex, setMessageIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setMessageIndex((current) => (current + 1) % generationMessages.length);
+    }, 2800);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="create-loading-wrap">
+      <div className="quiz-generation-loader" role="status" aria-live="polite">
+        <div className="quiz-loader-scene" aria-hidden="true">
+          <span className="quiz-loader-orbit quiz-loader-orbit-outer" />
+          <span className="quiz-loader-orbit quiz-loader-orbit-inner" />
+          <div className="quiz-loader-card quiz-loader-card-back" />
+          <div className="quiz-loader-card quiz-loader-card-front">
+            <div className="quiz-loader-card-heading">
+              <span>QUESTION 01</span>
+              <Sparkles size={14} />
+            </div>
+            <i className="quiz-loader-line quiz-loader-line-long" />
+            <i className="quiz-loader-line quiz-loader-line-short" />
+            <div className="quiz-loader-answer"><span>A</span><i /></div>
+            <div className="quiz-loader-answer"><span>B</span><i /></div>
+          </div>
+          <span className="quiz-loader-float quiz-loader-float-spark"><Sparkles size={17} /></span>
+          <span className="quiz-loader-float quiz-loader-float-check"><Check size={15} /></span>
+        </div>
+        <div className="quiz-loader-copy">
+          <span className="quiz-loader-eyebrow">YOUR STUDY SET IS IN THE WORKS</span>
+          <h2>Creating your quiz<span className="quiz-loader-dots" aria-hidden="true"><i /><i /><i /></span></h2>
+          <p key={messageIndex} className="quiz-loader-message">{generationMessages[messageIndex]}</p>
+        </div>
+        <div className="quiz-loader-progress" aria-hidden="true"><span /></div>
+        <span className="quiz-loader-note">This can take a few moments. Keep this page open.</span>
+      </div>
+    </div>
+  );
+}
+
+export default function CreateQuiz({ onCreateQuiz, onStartQuiz }) {
   const [step, setStep] = useState(0);
   const [sourceType, setSourceType] = useState('document');
   const [file, setFile] = useState(null);
@@ -78,7 +124,7 @@ export default function CreateQuiz({ onCreateQuiz, onUploadFile }) {
         questionTypes,
         includeExplanations,
       });
-      navigate(`/quiz/${quiz.id}`, { state: { startNew: true } });
+      await onStartQuiz(quiz);
     } catch (generationError) {
       setError(generationError.message || 'The quiz could not be generated. Check that the Django server is running.');
     } finally {
@@ -87,7 +133,7 @@ export default function CreateQuiz({ onCreateQuiz, onUploadFile }) {
   };
 
   if (generating) {
-    return <div className="create-loading-wrap"><LoadingState label="Creating your quiz…" /></div>;
+    return <QuizGenerationLoader />;
   }
 
   return (
@@ -145,7 +191,7 @@ export default function CreateQuiz({ onCreateQuiz, onUploadFile }) {
               )}
               {error && <div className="form-error" role="alert">{error}</div>}
               <div className="wizard-actions">
-                <span className="subtle-note"><Sparkles size={14} /> Your content stays in this demo</span>
+                <span className="subtle-note"><Sparkles size={14} /> QuizAI stores your generated study set.</span>
                 <button className="button primary" onClick={continueToSetup}>Continue <ArrowRight size={16} /></button>
               </div>
             </>

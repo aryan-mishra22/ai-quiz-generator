@@ -20,7 +20,7 @@ QuizAI is a study tool that turns learning materials into practice quizzes. Uplo
 QuizAI is organized as one repository with two applications:
 
 - [Frontend](frontend/README.md) — the React interface for accounts, documents, and quizzes
-- [Backend](backend/README.md) — the Django API, MySQL data store, PDF extraction, and question-generation pipeline
+- [Backend](backend/README.md) — the Django API, PostgreSQL data store, PDF extraction, and question-generation pipeline
 
 The frontend communicates with the backend through its REST API.
 

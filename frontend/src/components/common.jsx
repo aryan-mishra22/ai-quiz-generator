@@ -48,12 +48,15 @@ export function EmptyState({ icon: Icon = FileQuestion, title, description, acti
   );
 }
 
-export function LoadingState({ label = 'Preparing your quiz…' }) {
+export function LoadingState({
+  label = 'Preparing your quiz…',
+  description = 'Gathering your learning material and building a practice set.',
+}) {
   return (
     <div className="loading-state" role="status">
       <span className="spinner" />
       <strong>{label}</strong>
-      <span>Gathering your learning material and building a practice set.</span>
+      <span>{description}</span>
     </div>
   );
 }

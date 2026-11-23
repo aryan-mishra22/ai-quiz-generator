@@ -1,18 +1,26 @@
 import { ArrowRight, BookOpenCheck, Brain, FileText, Plus, Sparkles, Target, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { DifficultyBadge, PageHeading, SectionHeader, StatCard } from '../components/common.jsx';
-import { formatDate, formatRelativeTime } from '../services/demoService.js';
+import { formatDate, formatRelativeTime } from '../services/formatters.js';
 
 function ActivityIcon({ type }) {
   const Icon = type === 'uploaded' ? FileText : type === 'completed' ? BookOpenCheck : Sparkles;
   return <span className={`activity-icon ${type}`}><Icon size={16} /></span>;
 }
 
-export default function Dashboard({ userName, quizzes, documents, activities, onStartQuiz }) {
-  const firstName = userName?.trim().split(/\s+/)[0] || 'Jamie';
-  const completed = quizzes.filter((quiz) => quiz.score !== null && quiz.score !== undefined);
-  const average = completed.length
-    ? Math.round(completed.reduce((total, quiz) => total + quiz.score, 0) / completed.length)
+export default function Dashboard({
+  userName,
+  quizzes,
+  documents,
+  activities,
+  attempts,
+  onStartQuiz,
+  startingQuizId,
+}) {
+  const firstName = userName?.trim().split(/\s+/)[0] || 'there';
+  const completedAttempts = attempts.filter((attempt) => attempt.completed_at);
+  const average = completedAttempts.length
+    ? Math.round(completedAttempts.reduce((total, attempt) => total + attempt.score, 0) / completedAttempts.length)
     : 0;
   const questionCount = quizzes.reduce((total, quiz) => total + quiz.questionCount, 0);
 
@@ -26,10 +34,10 @@ export default function Dashboard({ userName, quizzes, documents, activities, on
       />
 
       <section className="stats-grid" aria-label="Learning statistics">
-        <StatCard label="Total quizzes" value={quizzes.length} change="+2" changeLabel="vs. last month" icon={Brain} tone="violet" />
-        <StatCard label="Questions generated" value={questionCount} change="+18" changeLabel="across all quizzes" icon={Sparkles} tone="blue" />
-        <StatCard label="Documents uploaded" value={documents.length} change="+1" changeLabel="ready to study" icon={FileText} tone="amber" />
-        <StatCard label="Average quiz score" value={`${average}%`} change={completed.length ? '+6%' : undefined} changeLabel="keep up the great work" icon={Target} tone="green" />
+        <StatCard label="Total quizzes" value={quizzes.length} changeLabel="created from your materials" icon={Brain} tone="violet" />
+        <StatCard label="Questions generated" value={questionCount} changeLabel="across all quizzes" icon={Sparkles} tone="blue" />
+        <StatCard label="Documents uploaded" value={documents.length} changeLabel="in your library" icon={FileText} tone="amber" />
+        <StatCard label="Average quiz score" value={`${average}%`} changeLabel={`${completedAttempts.length} completed ${completedAttempts.length === 1 ? 'attempt' : 'attempts'}`} icon={Target} tone="green" />
       </section>
 
       <section className="dashboard-hero">
@@ -44,7 +52,7 @@ export default function Dashboard({ userName, quizzes, documents, activities, on
           <div className="orbit orbit-two" />
           <div className="hero-orb"><Brain size={54} strokeWidth={1.35} /></div>
           <span className="float-card float-card-one"><BookOpenCheck size={17} /><span><b>Learn</b><small>at your pace</small></span></span>
-          <span className="float-card float-card-two"><TrendingUp size={17} /><span><b>+12%</b><small>this week</small></span></span>
+          <span className="float-card float-card-two"><TrendingUp size={17} /><span><b>Keep going</b><small>one quiz at a time</small></span></span>
           <span className="sparkle sparkle-a">✦</span><span className="sparkle sparkle-b">✧</span>
         </div>
       </section>
@@ -71,7 +79,9 @@ export default function Dashboard({ userName, quizzes, documents, activities, on
                   <DifficultyBadge difficulty={quiz.difficulty} />
                 </div>
                 <div className="recent-quiz-date">{formatDate(quiz.createdAt)}</div>
-                <button className="button small-button secondary" onClick={() => onStartQuiz(quiz)}>Start quiz</button>
+                <button className="button small-button secondary" disabled={startingQuizId === quiz.serverDocumentId} onClick={() => onStartQuiz(quiz)}>
+                  {startingQuizId === quiz.serverDocumentId ? 'Starting…' : 'Start quiz'}
+                </button>
               </article>
             ))}
             {!quizzes.length && <div className="inline-empty">Your first quiz is just a few clicks away.</div>}

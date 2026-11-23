@@ -4,7 +4,7 @@ from .models import Document, Question, Option
 class OptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Option
-        fields = ['id', 'option_text', 'is_correct']
+        fields = ['id', 'option_text']
 
 
 class QuestionSerializer(serializers.ModelSerializer):
@@ -12,7 +12,7 @@ class QuestionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Question
-        fields = ['id', 'question_text', 'question_type', 'correct_answer', 'options']
+        fields = ['id', 'question_text', 'question_type', 'topic', 'options']
 
 
 class DocumentSerializer(serializers.ModelSerializer):
@@ -20,4 +20,15 @@ class DocumentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Document
-        fields = ['id', 'content', 'name', 'size', 'page_count', 'created_at', 'questions']
+        fields = [
+            'id',
+            'content',
+            'name',
+            'size',
+            'page_count',
+            'created_at',
+            'questions',
+            'processing_status',
+            'processing_error',
+            'extraction_report',
+        ]

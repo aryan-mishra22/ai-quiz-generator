@@ -2,7 +2,7 @@ import { FileText, MoreHorizontal, Search, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { EmptyState, PageHeading, SectionHeader } from '../components/common.jsx';
 import FileUpload from '../components/documents/FileUpload.jsx';
-import { formatDate } from '../services/demoService.js';
+import { formatDate } from '../services/formatters.js';
 
 export default function PDFLibrary({ documents, onUpload, onDelete }) {
   const [query, setQuery] = useState('');
@@ -26,7 +26,7 @@ export default function PDFLibrary({ documents, onUpload, onDelete }) {
       <section className="panel upload-panel" id="pdf-library-upload">
         <SectionHeader title="Add a study document" subtitle="Upload a PDF to keep it ready for your next quiz." />
         <FileUpload compact onFileSelected={onUpload} />
-        <p className="upload-disclaimer">Demo mode: files are represented with sample metadata. No document text is processed.</p>
+        <p className="upload-disclaimer">PDF text is extracted and stored with your study documents.</p>
       </section>
       <section className="panel documents-panel">
         <div className="library-section-heading">
@@ -47,6 +47,10 @@ export default function PDFLibrary({ documents, onUpload, onDelete }) {
                 </div>
                 <div className="document-card-body">
                   <h3 title={item.name}>{item.name}</h3>
+                  <span className={`document-status ${item.processingStatus}`}>
+                    {item.processingStatus === 'failed' ? 'Failed' : item.processingStatus === 'processing' ? 'Processing' : 'Ready'}
+                  </span>
+                  {item.processingError && <p className="document-processing-error">{item.processingError}</p>}
                   <div className="document-details"><span>{item.size}</span><i /> <span>{item.pages} pages</span></div>
                   <div className="document-card-footer">
                     <span>Added {formatDate(item.uploadedAt)}</span>

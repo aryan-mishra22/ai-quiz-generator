@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, Sparkles, UserRound } from 'lucide-react';
 
-export default function AuthPage({ mode, onModeChange, onSubmit, loading }) {
+export default function AuthPage({ mode, onModeChange, onSubmit, loading, notice }) {
   const isSignup = mode === 'signup';
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -55,6 +55,7 @@ export default function AuthPage({ mode, onModeChange, onSubmit, loading }) {
           <span className="auth-icon">{isSignup ? <UserRound size={22} /> : <LockKeyhole size={22} />}</span>
           <h2>{isSignup ? 'Create your account' : 'Welcome back'}</h2>
           <p>{isSignup ? 'Start building quizzes and tracking your progress.' : 'Sign in to continue your learning journey.'}</p>
+          {notice && <div className="auth-error" role="status">{notice}</div>}
 
           <form onSubmit={submit} className="auth-form">
             {isSignup && (

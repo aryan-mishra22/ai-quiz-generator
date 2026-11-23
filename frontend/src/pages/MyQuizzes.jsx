@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react';
 import { BookOpenCheck, Check, Clock3, Grid2X2, List, Play, Search, Trash2, Trophy } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { DifficultyBadge, EmptyState, PageHeading } from '../components/common.jsx';
-import { formatDate } from '../services/demoService.js';
+import { formatDate } from '../services/formatters.js';
 
-function QuizTile({ quiz, view, onStart, onViewResults, onDelete }) {
+function QuizTile({ quiz, view, onStart, onViewResults, onDelete, startingQuizId }) {
   const completed = quiz.score !== null && quiz.score !== undefined;
+  const starting = startingQuizId === quiz.serverDocumentId;
   return (
     <article className={`quiz-tile ${view === 'list' ? 'list-view' : ''}`}>
       <div className={`quiz-tile-art ${quiz.topic === 'Astronomy' ? 'sky' : quiz.topic === 'Economics' ? 'peach' : 'lilac'}`}>
@@ -22,7 +23,7 @@ function QuizTile({ quiz, view, onStart, onViewResults, onDelete }) {
         </div>
         {completed && <div className="quiz-score-line"><span><Trophy size={14} /> Last score</span><strong>{quiz.score}%</strong><span className="mini-progress"><i style={{ width: `${quiz.score}%` }} /></span></div>}
         <div className="quiz-tile-actions">
-          <button className="button primary small-button" onClick={() => onStart(quiz)}><Play size={14} fill="currentColor" /> Start quiz</button>
+          <button className="button primary small-button" disabled={starting} onClick={() => onStart(quiz)}><Play size={14} fill="currentColor" /> {starting ? 'Starting…' : 'Start quiz'}</button>
           {completed && <button className="button secondary small-button" onClick={() => onViewResults(quiz)}><Check size={14} /> Results</button>}
         </div>
       </div>
@@ -30,7 +31,7 @@ function QuizTile({ quiz, view, onStart, onViewResults, onDelete }) {
   );
 }
 
-export default function MyQuizzes({ quizzes, onDelete, onStart, onViewResults }) {
+export default function MyQuizzes({ quizzes, onDelete, onStart, onViewResults, startingQuizId }) {
   const [query, setQuery] = useState('');
   const [difficulty, setDifficulty] = useState('All difficulties');
   const [dateRange, setDateRange] = useState('Any time');
@@ -45,7 +46,7 @@ export default function MyQuizzes({ quizzes, onDelete, onStart, onViewResults })
   }), [quizzes, query, difficulty, dateRange]);
 
   const confirmDelete = (quiz) => {
-    if (window.confirm(`Delete “${quiz.title}” from your quiz library?`)) onDelete(quiz.id);
+    if (window.confirm(`Delete “${quiz.title}” from your quiz library?`)) onDelete(quiz);
   };
 
   return (
@@ -80,7 +81,7 @@ export default function MyQuizzes({ quizzes, onDelete, onStart, onViewResults })
         {filtered.length ? (
           <div className={`quiz-grid ${view === 'list' ? 'as-list' : ''}`}>
             {filtered.map((quiz) => (
-              <QuizTile key={quiz.id} quiz={quiz} view={view} onStart={onStart} onViewResults={onViewResults} onDelete={confirmDelete} />
+              <QuizTile key={quiz.id} quiz={quiz} view={view} onStart={onStart} onViewResults={onViewResults} onDelete={confirmDelete} startingQuizId={startingQuizId} />
             ))}
           </div>
         ) : (

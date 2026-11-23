@@ -13,6 +13,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
+import { LoadingState } from '../common.jsx';
 
 const navigation = [
   { label: 'Dashboard', to: '/', icon: LayoutDashboard, end: true },
@@ -32,15 +33,23 @@ const pageTitles = {
   '/settings': 'Settings',
 };
 
-export default function AppShell({ theme, onLogout, user }) {
+export default function AppShell({
+  theme,
+  onLogout,
+  user,
+  documentCount,
+  loading,
+  apiError,
+  onDismissApiError,
+}) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const title = location.pathname.startsWith('/quiz/') ? 'Quiz practice' : (pageTitles[location.pathname] || 'QuizAI');
-  const displayName = user?.name || 'Jamie Davis';
+  const title = location.pathname.startsWith('/attempt/') ? 'Quiz practice' : (pageTitles[location.pathname] || 'QuizAI');
+  const displayName = user?.name || 'QuizAI member';
   const initials = displayName.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
 
   const closeMobile = () => setMobileOpen(false);
@@ -73,7 +82,7 @@ export default function AppShell({ theme, onLogout, user }) {
             >
               <Icon size={19} strokeWidth={1.8} />
               {!collapsed && <span>{label}</span>}
-              {label === 'PDF Library' && !collapsed && <span className="nav-count">3</span>}
+              {label === 'PDF Library' && !collapsed && <span className="nav-count">{documentCount}</span>}
             </NavLink>
           ))}
         </nav>
@@ -159,7 +168,15 @@ export default function AppShell({ theme, onLogout, user }) {
           </div>
         </header>
         <main className="content-area">
-          <Outlet />
+          {apiError && (
+            <div className="form-error api-error" role="alert">
+              <span>{apiError}</span>
+              <button type="button" onClick={onDismissApiError}>Dismiss</button>
+            </div>
+          )}
+          {loading
+            ? <LoadingState label="Loading your learning data…" description="Fetching your quizzes, documents, and activity." />
+            : <Outlet />}
         </main>
         <footer className="app-footer">
           <span>© 2025 QuizAI</span>

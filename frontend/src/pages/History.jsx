@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { BookOpenCheck, CalendarDays, FileText, Sparkles } from 'lucide-react';
 import { EmptyState, PageHeading } from '../components/common.jsx';
-import { formatDate, formatRelativeTime } from '../services/demoService.js';
+import { formatDate, formatRelativeTime } from '../services/formatters.js';
 
 const iconByType = {
   completed: BookOpenCheck,

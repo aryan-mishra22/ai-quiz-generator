@@ -12,4 +12,7 @@ urlpatterns = [
     path('api/upload-document/', views.upload_document_api, name='upload_document_api'),
     path('api/documents/<int:document_id>/', views.delete_document_api, name='delete_document_api'),
     path('api/documents/', views.list_documents_api, name='list_documents_api'),
+    path('api/attempts/', views.attempts_api, name='attempts'),
+    path('api/attempts/<int:attempt_id>/submit/', views.submit_attempt_api, name='attempt_submit'),
+    path('api/attempts/<int:attempt_id>/', views.get_attempt_api, name='attempt_detail'),
 ]

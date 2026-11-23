@@ -1,16 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { CheckCircle2, FileText, FileUp, LoaderCircle, Trash2 } from 'lucide-react';
-import { formatFileSize } from '../../services/demoService.js';
+import { formatFileSize } from '../../services/formatters.js';
 
 export default function FileUpload({ onFileSelected, compact = false }) {
   const inputRef = useRef(null);
-  const uploadTimerRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [processing, setProcessing] = useState(false);
 
-  const processFile = (file) => {
+  const processFile = async (file) => {
     setError('');
     if (!file) return;
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
@@ -24,25 +24,35 @@ export default function FileUpload({ onFileSelected, compact = false }) {
 
     setSelectedFile(file);
     setUploading(true);
-    uploadTimerRef.current = window.setTimeout(() => {
+    setProcessing(false);
+    try {
+      const result = await onFileSelected(file);
+      if (result?.processingStatus === 'failed') {
+        setSelectedFile(null);
+        setError(result.processingError || 'No readable text found. This looks like a scanned PDF.');
+        if (inputRef.current) inputRef.current.value = '';
+      } else if (result?.processingStatus === 'processing') {
+        setProcessing(true);
+      }
+    } catch (uploadError) {
+      setSelectedFile(null);
+      setError(uploadError.message || 'The PDF could not be uploaded.');
+      if (inputRef.current) inputRef.current.value = '';
+    } finally {
       setUploading(false);
-      Promise.resolve(onFileSelected(file)).catch((uploadError) => {
-        setError(uploadError.message || 'The PDF could not be uploaded.');
-      });
-    }, 650);
+    }
   };
 
   const clearFile = (event) => {
     event.stopPropagation();
-    window.clearTimeout(uploadTimerRef.current);
+    if (uploading) return;
     setUploading(false);
+    setProcessing(false);
     setSelectedFile(null);
     setError('');
     onFileSelected(null);
     if (inputRef.current) inputRef.current.value = '';
   };
-
-  useEffect(() => () => window.clearTimeout(uploadTimerRef.current), []);
 
   return (
     <div>
@@ -59,10 +69,10 @@ export default function FileUpload({ onFileSelected, compact = false }) {
         }}
         onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
-        onDrop={(event) => {
+        onDrop={async (event) => {
           event.preventDefault();
           setDragging(false);
-          processFile(event.dataTransfer.files[0]);
+          await processFile(event.dataTransfer.files[0]);
         }}
         aria-label="Upload a PDF document"
       >
@@ -71,16 +81,16 @@ export default function FileUpload({ onFileSelected, compact = false }) {
           type="file"
           accept="application/pdf,.pdf"
           hidden
-          onChange={(event) => processFile(event.target.files[0])}
+          onChange={(event) => { void processFile(event.target.files[0]); }}
         />
         {selectedFile ? (
           <div className="selected-file-row">
             <span className="file-icon large"><FileText size={20} /></span>
             <span className="selected-file-copy">
               <strong>{selectedFile.name}</strong>
-              <small>{uploading ? 'Uploading…' : `${formatFileSize(selectedFile.size)} · PDF document`}</small>
+              <small>{uploading ? 'Uploading…' : processing ? 'Processing in your library…' : `${formatFileSize(selectedFile.size)} · PDF document`}</small>
             </span>
-            {uploading ? <LoaderCircle className="spin" size={19} /> : <CheckCircle2 className="success-icon" size={19} />}
+            {(uploading || processing) ? <LoaderCircle className="spin" size={19} /> : <CheckCircle2 className="success-icon" size={19} />}
             <button
               type="button"
               className="remove-file"

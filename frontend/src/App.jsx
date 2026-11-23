@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import AppShell from './components/layout/AppShell.jsx';
 import Dashboard from './pages/Dashboard.jsx';
@@ -9,122 +9,220 @@ import PDFLibrary from './pages/PDFLibrary.jsx';
 import History from './pages/History.jsx';
 import Settings from './pages/Settings.jsx';
 import AuthPage from './pages/AuthPage.jsx';
+import { formatFileSize } from './services/formatters.js';
 import {
-  addActivity,
-  formatFileSize,
-  loadDemoState,
-  saveDemoState,
-} from './services/demoService.js';
-import {
+  currentUserApi,
   deleteDocumentApi,
   generateQuizApi,
+  listAttemptsApi,
   listDocumentsApi,
-  uploadDocumentApi,
-  signupApi,
   loginApi,
   logoutApi,
-  currentUserApi,
+  signupApi,
+  startAttemptApi,
+  uploadDocumentApi,
 } from './services/apiService.js';
+
+function readTheme() {
+  try {
+    return localStorage.getItem('quizai-theme') === 'dark' ? 'dark' : 'light';
+  } catch (error) {
+    console.error('Could not read the saved appearance preference.', error);
+    return 'light';
+  }
+}
+
+function clearLegacyBrowserData() {
+  const legacyKeys = new Set([
+    'quizai-demo-v1',
+    'quizai-user',
+    'quizai-demo-account',
+    'quizai-profile',
+  ]);
+  for (const key of Object.keys(localStorage)) {
+    if (legacyKeys.has(key) || key.startsWith('quizai-password-')) {
+      localStorage.removeItem(key);
+    }
+  }
+}
 
 function mapServerDocument(document) {
   return {
-    id: `server-doc-${document.id}`,
+    id: document.id,
     serverId: document.id,
     name: document.name || 'Untitled document',
     size: document.size ? formatFileSize(document.size) : '0 KB',
     pages: document.page_count || 0,
     uploadedAt: document.created_at,
+    processingStatus: document.processing_status || 'ready',
+    processingError: document.processing_error || '',
   };
 }
 
-function mapServerQuiz(document, config = {}) {
-  const questions = (document.questions || []).map((question, index) => {
-    const correctAnswer = question.correct_answer;
-    const allOptions = question.options.map((option) => option.option_text);
-    const optionCount = config.optionCount ? Number(config.optionCount) : allOptions.length;
-    const distractors = allOptions.filter((option) => option !== correctAnswer);
-    const options = [correctAnswer, ...distractors].slice(0, optionCount);
-    if (!options.includes(correctAnswer)) options[0] = correctAnswer;
-    return {
-      id: `server-question-${question.id}`,
-      question: question.question_text,
-      options: options.slice(0, config.optionCount ? Number(config.optionCount) : options.length),
-      correctAnswers: [correctAnswer],
-      correctIndex: Math.max(0, options.indexOf(correctAnswer)),
-      difficulty: config.difficulty || 'Medium',
-      type: 'Multiple Choice',
-      explanation: 'Generated from the source document.',
-      source: document.name || 'Uploaded study material',
-      topic: config.topic || 'Study topic',
-    };
-  });
-
+function mapServerQuiz(document, attempts) {
+  const questions = document.questions || [];
+  const latestAttempt = attempts.find(
+    (attempt) => attempt.document_id === document.id && attempt.completed_at,
+  );
   return {
     id: `server-quiz-${document.id}`,
     serverDocumentId: document.id,
-    title: config.title || document.name || 'Generated quiz',
-    sourceTitle: config.sourceTitle || document.name || 'Study document',
-    sourceType: config.sourceType || 'document',
-    topic: config.topic || 'Study topic',
+    title: document.name || 'Generated quiz',
+    sourceTitle: document.name || 'Study document',
+    sourceType: document.size ? 'document' : 'topic',
+    topic: questions.find((question) => question.topic)?.topic || 'Study topic',
     questionCount: questions.length,
-    difficulty: config.difficulty || 'Medium',
+    difficulty: 'Medium',
     createdAt: document.created_at,
-    score: null,
-    lastAttemptAt: null,
-    includeExplanations: config.includeExplanations !== false,
-    questions,
+    score: latestAttempt?.score ?? null,
+    lastAttemptAt: latestAttempt?.completed_at ?? null,
+    lastAttemptId: latestAttempt?.id ?? null,
+    includeExplanations: true,
+    questions: questions.map((question) => ({
+      id: question.id,
+      question: question.question_text,
+      topic: question.topic,
+      options: question.options.map((option) => option.option_text),
+    })),
   };
 }
 
-function RoutedApp({ state, setState, theme, setTheme, onCreateQuiz, onUploadFile, onDeleteDocument, onCompleteQuiz, onLogout, user }) {
+function mapActivities(documents, attempts) {
+  const documentActivities = documents.map((document) => {
+    const hasQuiz = document.questions?.length > 0;
+    return {
+      id: `document-${document.id}`,
+      type: hasQuiz ? 'created' : 'uploaded',
+      title: hasQuiz
+        ? `Created ${document.name || 'a quiz'}`
+        : `Uploaded ${document.name || 'a document'}`,
+      detail: hasQuiz
+        ? `${document.questions.length} questions`
+        : `${document.page_count || 0} pages · ${formatFileSize(document.size || 0)}`,
+      createdAt: document.created_at,
+    };
+  });
+  const attemptActivities = attempts
+    .filter((attempt) => attempt.completed_at)
+    .map((attempt) => ({
+      id: `attempt-${attempt.id}`,
+      type: 'completed',
+      title: `Completed ${attempt.title}`,
+      detail: `${attempt.score}% score`,
+      createdAt: attempt.completed_at,
+    }));
+
+  return [...documentActivities, ...attemptActivities]
+    .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+}
+
+function attemptSummary(attempt) {
+  return {
+    id: attempt.id,
+    document_id: attempt.document_id,
+    title: attempt.title,
+    started_at: attempt.started_at,
+    completed_at: attempt.completed_at,
+    score: attempt.score,
+    question_count: attempt.questions.length,
+  };
+}
+
+function RoutedApp({
+  documents,
+  attempts,
+  theme,
+  setTheme,
+  onCreateQuiz,
+  onUploadFile,
+  onDeleteDocument,
+  onStartQuiz,
+  onAttemptComplete,
+  onLogout,
+  onDismissApiError,
+  apiError,
+  dataLoading,
+  startingQuizId,
+  user,
+}) {
   const navigate = useNavigate();
+  const quizzes = useMemo(
+    () => documents
+      .filter((document) => document.questions?.length)
+      .map((document) => mapServerQuiz(document, attempts)),
+    [documents, attempts],
+  );
+  const visibleDocuments = useMemo(() => documents.map(mapServerDocument), [documents]);
+  const activities = useMemo(() => mapActivities(documents, attempts), [documents, attempts]);
 
   return (
     <Routes>
-      <Route element={<AppShell theme={theme} onLogout={onLogout} user={user} />}>
+      <Route
+        element={(
+          <AppShell
+            theme={theme}
+            onLogout={onLogout}
+            user={user}
+            documentCount={documents.length}
+            loading={dataLoading}
+            apiError={apiError}
+            onDismissApiError={onDismissApiError}
+          />
+        )}
+      >
         <Route
           index
-          element={
+          element={(
             <Dashboard
               userName={user?.name}
-              quizzes={state.quizzes}
-              documents={state.documents}
-              activities={state.activities}
-              onStartQuiz={(quiz) => navigate(`/quiz/${quiz.id}`)}
+              quizzes={quizzes}
+              documents={visibleDocuments}
+              activities={activities}
+              attempts={attempts}
+              onStartQuiz={onStartQuiz}
+              startingQuizId={startingQuizId}
             />
-          }
+          )}
         />
-        <Route
-          path="create-quiz"
-          element={<CreateQuiz onCreateQuiz={onCreateQuiz} onUploadFile={onUploadFile} />}
-        />
+        <Route path="create-quiz" element={<CreateQuiz onCreateQuiz={onCreateQuiz} onStartQuiz={onStartQuiz} />} />
         <Route
           path="quizzes"
-          element={
+          element={(
             <MyQuizzes
-              quizzes={state.quizzes}
-              onDelete={(id) => setState((current) => ({ ...current, quizzes: current.quizzes.filter((quiz) => quiz.id !== id) }))}
-              onStart={(quiz) => navigate(`/quiz/${quiz.id}`)}
-              onViewResults={(quiz) => navigate(`/quiz/${quiz.id}`, { state: { showResults: true } })}
+              quizzes={quizzes}
+              onDelete={(quiz) => onDeleteDocument(quiz.serverDocumentId)}
+              onStart={onStartQuiz}
+              onViewResults={(quiz) => {
+                if (quiz.lastAttemptId) navigate(`/attempt/${quiz.lastAttemptId}`);
+              }}
+              startingQuizId={startingQuizId}
             />
-          }
+          )}
         />
         <Route
-          path="quiz/:quizId"
-          element={<QuizPreview quizzes={state.quizzes} onComplete={onCompleteQuiz} />}
+          path="attempt/:attemptId"
+          element={(
+            <QuizPreview
+              onStartNew={onStartQuiz}
+              onAttemptComplete={(attempt) => {
+                const summary = attemptSummary(attempt);
+                onAttemptComplete(summary);
+              }}
+            />
+          )}
         />
         <Route
           path="documents"
-          element={
+          element={(
             <PDFLibrary
-              documents={state.documents}
+              documents={visibleDocuments}
               onUpload={onUploadFile}
               onDelete={onDeleteDocument}
             />
-          }
+          )}
         />
-        <Route path="history" element={<History activities={state.activities} />} />
-        <Route path="settings" element={<Settings theme={theme} setTheme={setTheme} />} />
+        <Route path="history" element={<History activities={activities} />} />
+        <Route path="settings" element={<Settings theme={theme} setTheme={setTheme} user={user} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
@@ -132,12 +230,22 @@ function RoutedApp({ state, setState, theme, setTheme, onCreateQuiz, onUploadFil
 }
 
 export default function App() {
-  const [state, setState] = useState(loadDemoState);
-  const [theme, setThemeState] = useState(() => localStorage.getItem('quizai-theme') || 'light');
+  const navigate = useNavigate();
+  const [documents, setDocuments] = useState([]);
+  const [attempts, setAttempts] = useState([]);
+  const [theme, setThemeState] = useState(readTheme);
   const [user, setUser] = useState(null);
   const [authMode, setAuthMode] = useState('login');
   const [authLoading, setAuthLoading] = useState(true);
   const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [authNotice, setAuthNotice] = useState('');
+  const [dataLoading, setDataLoading] = useState(false);
+  const [apiError, setApiError] = useState('');
+  const [startingQuizId, setStartingQuizId] = useState(null);
+
+  useEffect(() => {
+    clearLegacyBrowserData();
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -145,10 +253,11 @@ export default function App() {
       .then((serverUser) => {
         if (active) setUser(serverUser);
       })
-      .catch(() => {
+      .catch((error) => {
         if (!active) return;
-        const savedUser = localStorage.getItem('quizai-user');
-        setUser(savedUser ? JSON.parse(savedUser) : null);
+        if (error.status !== 401 && error.status !== 403) {
+          setAuthNotice('Could not connect to QuizAI. Check that the backend is running, then try again.');
+        }
       })
       .finally(() => {
         if (active) setAuthLoading(false);
@@ -157,51 +266,83 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    saveDemoState(state);
-  }, [state]);
-
-  useEffect(() => {
-    let active = true;
-    listDocumentsApi()
-      .then((documents) => {
-        if (!active) return;
-        const serverDocuments = documents.map(mapServerDocument);
-        const serverQuizzes = documents
-          .filter((document) => document.questions?.length)
-          .map((document) => mapServerQuiz(document));
-        setState((current) => ({
-          ...current,
-          documents: [...serverDocuments, ...current.documents.filter((document) => !document.serverId)],
-          quizzes: [...serverQuizzes, ...current.quizzes],
-        }));
-      })
-      .catch(() => {
-        // Demo state remains available when Django is not running.
-      });
-    return () => { active = false; };
+    const handleExpiredSession = () => {
+      setDocuments([]);
+      setAttempts([]);
+      setUser(null);
+      setAuthMode('login');
+      setAuthNotice('Your session expired. Sign in again to continue.');
+    };
+    window.addEventListener('quizai:session-expired', handleExpiredSession);
+    return () => window.removeEventListener('quizai:session-expired', handleExpiredSession);
   }, []);
 
   useEffect(() => {
+    try {
+      localStorage.setItem('quizai-theme', theme);
+    } catch (error) {
+      console.error('Could not save the appearance preference.', error);
+    }
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem('quizai-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (!user) {
+      setDocuments([]);
+      setAttempts([]);
+      setDataLoading(false);
+      return undefined;
+    }
+
+    let active = true;
+    setDataLoading(true);
+    setApiError('');
+    Promise.all([listDocumentsApi(), listAttemptsApi()])
+      .then(([serverDocuments, serverAttempts]) => {
+        if (!active) return;
+        setDocuments(serverDocuments);
+        setAttempts(serverAttempts);
+      })
+      .catch((error) => {
+        if (active) setApiError(error.message || 'Could not load your learning data.');
+      })
+      .finally(() => {
+        if (active) setDataLoading(false);
+      });
+    return () => { active = false; };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || !documents.some((document) => document.processing_status === 'processing')) {
+      return undefined;
+    }
+
+    let active = true;
+    const pollDocuments = async () => {
+      try {
+        const serverDocuments = await listDocumentsApi();
+        if (active) setDocuments(serverDocuments);
+      } catch (error) {
+        if (active) setApiError(error.message || 'Could not refresh document status.');
+      }
+    };
+    const timer = window.setInterval(pollDocuments, 1500);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [user, documents]);
 
   const setTheme = (nextTheme) => setThemeState(nextTheme);
 
   const onUploadFile = async (file) => {
     if (!file) return;
     const uploaded = await uploadDocumentApi(file);
-    const document = mapServerDocument(uploaded);
-    setState((current) => ({
-      ...current,
-      documents: [document, ...current.documents.filter((item) => item.serverId !== document.serverId)],
-      activities: addActivity(current.activities, {
-        type: 'uploaded',
-        title: `Uploaded ${file.name}`,
-        detail: `${document.pages} pages · ${document.size}`,
-      }),
-    }));
-    return document;
+    setDocuments((current) => [
+      uploaded,
+      ...current.filter((document) => document.id !== uploaded.id),
+    ]);
+    return mapServerDocument(uploaded);
   };
 
   const onCreateQuiz = async (config) => {
@@ -213,104 +354,77 @@ export default function App() {
       questionCount: Number(config.questionCount),
       file: config.sourceType === 'document' ? config.file : null,
     });
-    const quiz = mapServerQuiz(document, config);
-    if (!quiz.questions.length) {
+    if (!document.questions?.length) {
       throw new Error('The server could not generate questions from this source.');
     }
-    setState((current) => ({
-      ...current,
-      quizzes: [quiz, ...current.quizzes],
-      activities: addActivity(current.activities, {
-        type: 'created',
-        title: `Created ${quiz.title}`,
-        detail: `${quiz.questionCount} questions · ${quiz.difficulty} difficulty`,
-      }),
-    }));
-    return quiz;
+    setDocuments((current) => [
+      document,
+      ...current.filter((item) => item.id !== document.id),
+    ]);
+    return mapServerQuiz(document, attempts);
   };
 
-  const onDeleteDocument = async (id) => {
-    const document = state.documents.find((item) => item.id === id);
-    if (document?.serverId) {
-      await deleteDocumentApi(document.serverId);
+  const onDeleteDocument = async (documentId) => {
+    setApiError('');
+    try {
+      await deleteDocumentApi(documentId);
+      setDocuments((current) => current.filter((document) => document.id !== documentId));
+    } catch (error) {
+      setApiError(error.message || 'The document could not be deleted.');
     }
-    setState((current) => ({
-      ...current,
-      documents: current.documents.filter((item) => item.id !== id),
-    }));
+  };
+
+  const onStartQuiz = async (quizOrDocumentId) => {
+    const documentId = typeof quizOrDocumentId === 'number'
+      ? quizOrDocumentId
+      : quizOrDocumentId.serverDocumentId;
+    if (!documentId) {
+      setApiError('This quiz is not available on the server. Create it again to start an attempt.');
+      return;
+    }
+
+    setStartingQuizId(documentId);
+    setApiError('');
+    try {
+      const attempt = await startAttemptApi(documentId);
+      navigate(`/attempt/${attempt.id}`);
+    } catch (error) {
+      setApiError(error.message || 'Could not start this quiz attempt.');
+    } finally {
+      setStartingQuizId(null);
+    }
+  };
+
+  const onAttemptComplete = (summary) => {
+    setAttempts((current) => [
+      summary,
+      ...current.filter((attempt) => attempt.id !== summary.id),
+    ]);
   };
 
   const onAuthSubmit = async ({ name, email, password }) => {
     setAuthSubmitting(true);
+    setAuthNotice('');
     try {
-      if (authMode === 'signup') {
-        try {
-          const serverUser = await signupApi(name, email, password);
-          setUser(serverUser);
-          localStorage.setItem('quizai-user', JSON.stringify(serverUser));
-        } catch (serverError) {
-          if (serverError.message.includes('server returned') || serverError.message.includes('Failed to fetch')) {
-            const demoUser = { id: 'demo-user', name, email };
-            localStorage.setItem('quizai-user', JSON.stringify(demoUser));
-            localStorage.setItem('quizai-demo-account', JSON.stringify(demoUser));
-            localStorage.setItem(`quizai-password-${email}`, password);
-            setUser(demoUser);
-          } else {
-            throw serverError;
-          }
-        }
-      } else {
-        try {
-          const serverUser = await loginApi(email, password);
-          setUser(serverUser);
-          localStorage.setItem('quizai-user', JSON.stringify(serverUser));
-        } catch (serverError) {
-          if (serverError.message.includes('server returned') || serverError.message.includes('Failed to fetch')) {
-            const savedUser = JSON.parse(localStorage.getItem('quizai-demo-account') || 'null');
-            const savedPassword = localStorage.getItem(`quizai-password-${email}`);
-            if (savedUser?.email?.toLowerCase() !== email.toLowerCase() || savedPassword !== password) {
-              throw new Error('Invalid email or password.');
-            }
-            setUser(savedUser);
-          } else {
-            throw serverError;
-          }
-        }
-      }
+      const serverUser = authMode === 'signup'
+        ? await signupApi(name, email, password)
+        : await loginApi(email, password);
+      setUser(serverUser);
     } finally {
       setAuthSubmitting(false);
     }
   };
 
   const onLogout = async () => {
+    setApiError('');
     try {
       await logoutApi();
-    } catch {
-      // Clear the local session even if Django is unavailable.
+      setUser(null);
+      setAuthMode('login');
+      setAuthNotice('');
+    } catch (error) {
+      setApiError(error.message || 'Could not sign out. Please try again.');
     }
-    localStorage.removeItem('quizai-user');
-    setUser(null);
-    setAuthMode('login');
-  };
-
-  const onCompleteQuiz = (quizId, score, answers) => {
-    setState((current) => {
-      const quiz = current.quizzes.find((item) => item.id === quizId);
-      if (!quiz) return current;
-      return {
-        ...current,
-        quizzes: current.quizzes.map((item) => (
-          item.id === quizId
-            ? { ...item, score, lastAttemptAt: new Date().toISOString(), lastAnswers: answers }
-            : item
-        )),
-        activities: addActivity(current.activities, {
-          type: 'completed',
-          title: `Completed ${quiz.title}`,
-          detail: `${Math.round((score / 100) * quiz.questions.length)} of ${quiz.questions.length} questions correct`,
-        }),
-      };
-    });
   };
 
   if (authLoading) {
@@ -324,21 +438,27 @@ export default function App() {
         onModeChange={setAuthMode}
         onSubmit={onAuthSubmit}
         loading={authSubmitting}
+        notice={authNotice}
       />
     );
   }
 
   return (
     <RoutedApp
-      state={state}
-      setState={setState}
+      documents={documents}
+      attempts={attempts}
       theme={theme}
       setTheme={setTheme}
       onCreateQuiz={onCreateQuiz}
       onUploadFile={onUploadFile}
       onDeleteDocument={onDeleteDocument}
-      onCompleteQuiz={onCompleteQuiz}
+      onStartQuiz={onStartQuiz}
+      onAttemptComplete={onAttemptComplete}
       onLogout={onLogout}
+      onDismissApiError={() => setApiError('')}
+      apiError={apiError}
+      dataLoading={dataLoading}
+      startingQuizId={startingQuizId}
       user={user}
     />
   );
